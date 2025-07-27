@@ -33,28 +33,8 @@ public class LiteDbArbitrageDatabase : IArbitrageDatabase
         }
         // Configure mapper
         _mapper = BsonMapper.Global;
-        ConfigureMapper();
         
         _logger.LogInformation("LiteDB database initialized at {DbPath}", _dbPath);
-    }
-
-    private void ConfigureMapper()
-    {
-        /*// Configure OrderBookEntry to ensure proper serialization
-        _mapper.Entity<OrderBookEntry>()
-            .Id(x => $"{x.Price:0.00000000}_{x.Quantity:0.00000000}");
-        
-        // Configure TickerSymbol to ensure proper identification
-        _mapper.Entity<TickerSymbol>()
-            .Id(x => $"{x.Exchange}_{x.BaseAsset}_{x.QuoteAsset}");
-            
-        // Configure Symbol with proper Id
-        _mapper.Entity<Symbol>()
-            .Id(x => x.UniqueId);
-            
-        // Configure OrderBook with proper Id and references
-        _mapper.Entity<OrderBook>()
-            .Id(x => $"{x.Symbol.Exchange}_{x.Symbol.BaseAsset}_{x.Symbol.QuoteAsset}_{x.Timestamp.Ticks}");*/
     }
     
     private LiteDatabase GetDatabase()

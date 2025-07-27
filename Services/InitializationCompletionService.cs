@@ -27,7 +27,7 @@ public class InitializationCompletionService
     {
         if (_initializationCompletionSource.Task.IsCompleted)
         {
-            _initializationCompletionSource = new TaskCompletionSource<bool>();
+            _initializationCompletionSource = new();
         }
     }
 }

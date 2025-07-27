@@ -54,7 +54,7 @@ public class BinanceConnector : IExchange
             
             if (!exchangeInfo.Success)
             {
-                _logger?.LogError("Failed to get exchange info: {Error}", exchangeInfo.Error?.Message);
+                _logger.LogError("Failed to get exchange info: {Error}", exchangeInfo.Error?.Message);
                 return [];
             }
 
@@ -66,7 +66,7 @@ public class BinanceConnector : IExchange
         }
         catch (Exception ex)
         {
-            _logger?.LogError(ex, "Error getting symbols from Binance");
+            _logger.LogError(ex, "Error getting symbols from Binance");
             return [];
         }
     }
@@ -79,7 +79,7 @@ public class BinanceConnector : IExchange
             
             if (!orderBookData.Success)
             {
-                _logger?.LogError("Failed to get order book: {Error}", orderBookData.Error?.Message);
+                _logger.LogError("Failed to get order book: {Error}", orderBookData.Error?.Message);
                 return new OrderBook { Symbol = symbol };
             }
             
@@ -102,7 +102,7 @@ public class BinanceConnector : IExchange
         }
         catch (Exception ex)
         {
-            _logger?.LogError(ex, "Error getting order book from Binance for {Symbol}", symbol.ExchangeSymbol);
+            _logger.LogError(ex, "Error getting order book from Binance for {Symbol}", symbol.ExchangeSymbol);
             return new OrderBook { Symbol = symbol };
         }
     }
@@ -115,7 +115,7 @@ public class BinanceConnector : IExchange
 
             if (!userAssets.Success)
             {
-                _logger?.LogError("Failed to get coin information: {Error}", userAssets.Error?.Message);
+                _logger.LogError("Failed to get coin information: {Error}", userAssets.Error?.Message);
                 return [];
             }
 
@@ -153,7 +153,7 @@ public class BinanceConnector : IExchange
         }
         catch (Exception ex)
         {
-            _logger?.LogError(ex, "Error getting currency networks from Binance");
+            _logger.LogError(ex, "Error getting currency networks from Binance");
             return [];
         }
     }
@@ -176,7 +176,7 @@ public class BinanceConnector : IExchange
 
     private async Task<BinanceSymbol[]> FilterSymbolsAsync(BinanceSymbol[] symbols)
     {
-        _logger?.LogInformation("Filtering {SymbolCount} symbols based on trading volume", symbols.Length);
+        _logger.LogInformation("Filtering {SymbolCount} symbols based on trading volume", symbols.Length);
         
         var result = new List<BinanceSymbol>();
         var usdtPairs = symbols.Where(s => s.QuoteAsset == "USDT").ToArray();
@@ -199,7 +199,7 @@ public class BinanceConnector : IExchange
             {
                 // Take the next batch
                 var currentBatch = symbolNamesList.Skip(i).Take(batchSize).ToArray();
-                _logger?.LogDebug("Processing batch {BatchNumber} with {BatchSize} symbols (total {TotalProcessed}/{TotalSymbols})", 
+                _logger.LogDebug("Processing batch {BatchNumber} with {BatchSize} symbols (total {TotalProcessed}/{TotalSymbols})",
                     i / batchSize + 1, currentBatch.Length, i + currentBatch.Length, symbolNamesList.Count);
                 
                 // Get trading data for the current batch
@@ -234,22 +234,22 @@ public class BinanceConnector : IExchange
                             continue;
                         }
                         
-                        _logger?.LogDebug("Adding {ExchangeName} symbol {Symbol} with USDT volume {Volume:C0}", ExchangeName, symbol.Name, usdtVolume);
+                        _logger.LogDebug("Adding {ExchangeName} symbol {Symbol} with USDT volume {Volume:C0}", ExchangeName, symbol.Name, usdtVolume);
                         result.Add(symbol);
                     }
                     catch (Exception ex)
                     {
-                        _logger?.LogError(ex, "Error processing symbol data for {Symbol}", symbolData.Symbol);
+                        _logger.LogError(ex, "Error processing symbol data for {Symbol}", symbolData.Symbol);
                     }
                 }
             }
             
-            _logger?.LogInformation("Filtered {ResultCount} symbols based on trading volume criteria", result.Count);
+            _logger.LogInformation("Filtered {ResultCount} symbols based on trading volume criteria", result.Count);
             return result.ToArray();
         }
         catch (Exception ex)
         {
-            _logger?.LogError(ex, "Error filtering symbols");
+            _logger.LogError(ex, "Error filtering symbols");
             return [];
         }
     }
@@ -287,7 +287,7 @@ public class BinanceConnector : IExchange
         }
         catch (Exception ex)
         {
-            _logger?.LogError(ex, "Error calculating USDT volume for {Symbol}", symbol.Name);
+            _logger.LogError(ex, "Error calculating USDT volume for {Symbol}", symbol.Name);
             return 0m;
         }
     }
@@ -307,7 +307,7 @@ public class BinanceConnector : IExchange
             
             if (!priceResult.Success)
             {
-                _logger?.LogError("Failed to get price for {Symbol}: {Error}", symbol, priceResult.Error?.Message);
+                _logger.LogError("Failed to get price for {Symbol}: {Error}", symbol, priceResult.Error?.Message);
                 return 0m;
             }
             
@@ -317,7 +317,7 @@ public class BinanceConnector : IExchange
         }
         catch (Exception ex)
         {
-            _logger?.LogError(ex, "Error getting price for {Symbol}", symbol);
+            _logger.LogError(ex, "Error getting price for {Symbol}", symbol);
             return 0m;
         }
     }

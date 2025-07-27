@@ -10,22 +10,22 @@ public class OrderBook
     /// <summary>
     /// The ticker symbol this order book belongs to
     /// </summary>
-    public TickerSymbol Symbol { get; set; } = null!;
+    public TickerSymbol Symbol { get; init; } = null!;
     
     /// <summary>
     /// Timestamp when this order book was captured (in UTC)
     /// </summary>
-    public DateTime Timestamp { get; set; } = DateTime.UtcNow;
+    public DateTime Timestamp { get; init; } = DateTime.UtcNow;
     
     /// <summary>
     /// List of ask orders (sell orders) sorted by price ascending
     /// </summary>
-    public List<OrderBookEntry> Asks { get; set; } = new List<OrderBookEntry>();
+    public List<OrderBookEntry> Asks { get; set; } = [];
     
     /// <summary>
     /// List of bid orders (buy orders) sorted by price descending
     /// </summary>
-    public List<OrderBookEntry> Bids { get; set; } = new List<OrderBookEntry>();
+    public List<OrderBookEntry> Bids { get; set; } = [];
     
     /// <summary>
     /// The exchange-specific update ID or sequence number

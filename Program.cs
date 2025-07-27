@@ -41,7 +41,7 @@ public static class Program
         var baseDir = AppDomain.CurrentDomain.BaseDirectory;
         var exchangeConfigPath = Path.Combine(baseDir, "ExchangeConnectors", "Settings", "ExchangesSettings.json");
 
-        builder.ConfigureAppConfiguration((context, config) =>
+        builder.ConfigureAppConfiguration((_, config) =>
         {
             config.AddJsonFile(exchangeConfigPath, optional: false, reloadOnChange: true);
         });
@@ -72,7 +72,7 @@ public static class Program
         return builder;
     }
 
-    public static IHostBuilder SetupServices(this IHostBuilder builder)
+    private static IHostBuilder SetupServices(this IHostBuilder builder)
     {
         builder.ConfigureContainer<ContainerBuilder>(
             b =>

@@ -41,7 +41,7 @@ public class CollectorService : BackgroundService
         {
             // This is where we would put ongoing data collection logic
             // For now we just log that the service is running
-            _logger.LogInformation("Collector service running at: {time}", DateTimeOffset.Now);
+            _logger.LogInformation("Collector service running at: {Time}", DateTimeOffset.Now);
             await Task.Delay(10000, stoppingToken); // Check every 10 seconds instead of every second
         }
     }
