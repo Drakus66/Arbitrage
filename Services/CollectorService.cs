@@ -16,17 +16,20 @@ public class CollectorService : BackgroundService
     private readonly IArbitrageDatabase _database;
     private readonly IEnumerable<IExchange> _exchanges;
     private readonly InitializationCompletionService _initializationCompletionService;
-    
+    private readonly FindArbitrageService _findArbitrageService;
+
     public CollectorService(
         ILogger<CollectorService> logger,
         IArbitrageDatabase database,
         IEnumerable<IExchange> exchanges,
-        InitializationCompletionService initializationCompletionService)
+        InitializationCompletionService initializationCompletionService,
+        FindArbitrageService findArbitrageService)
     {
         _logger = logger;
         _database = database;
         _exchanges = exchanges;
         _initializationCompletionService = initializationCompletionService;
+        _findArbitrageService = findArbitrageService;
     }
     
     protected override async Task ExecuteAsync(CancellationToken stoppingToken)
@@ -42,7 +45,19 @@ public class CollectorService : BackgroundService
             // This is where we would put ongoing data collection logic
             // For now we just log that the service is running
             _logger.LogInformation("Collector service running at: {Time}", DateTimeOffset.Now);
-            await Task.Delay(10000, stoppingToken); // Check every 10 seconds instead of every second
+            await Task.Delay(2000, stoppingToken); // Check every 10 seconds instead of every second
+
+            foreach (var exchange in _exchanges)
+            {
+                var workTickers = _database.GetTickerSymbolsByExchange(exchange.ExchangeName);
+                var tickerNames = workTickers.Select(t => t.ExchangeSymbol).ToArray();
+                var prices = await exchange.GetTickersLastPricesAsync(tickerNames);
+
+                workTickers.ForEach(t => t.LastPrice = prices[t.ExchangeSymbol]);
+                _database.UpdateTickerSymbols(workTickers);
+            }
+
+            await _findArbitrageService.FindArbitrageOpportunities(stoppingToken);
         }
     }
 }

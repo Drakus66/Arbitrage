@@ -28,4 +28,6 @@ public interface IExchange
     /// Gets the name of the exchange
     /// </summary>
     string ExchangeName { get; }
+
+    Task<Dictionary<string, decimal>> GetTickersLastPricesAsync(IEnumerable<string> tickerNames);
 }

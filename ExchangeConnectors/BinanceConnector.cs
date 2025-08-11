@@ -4,7 +4,6 @@ using Arbitrage.ExchangeConnectors.Settings;
 using Arbitrage.SharedModels;
 using Binance.Net.Clients;
 using Binance.Net.Enums;
-using Binance.Net.Interfaces;
 using Binance.Net.Objects.Models.Spot;
 using Microsoft.Extensions.Logging;
 using Microsoft.Extensions.Options;
@@ -21,7 +20,7 @@ public class BinanceConnector : IExchange
         _logger = logger;
         var binanceSettings = settings?.Value.Binance;
 
-        if (binanceSettings == null)
+        /*if (binanceSettings == null)
         {
             _logger.LogError("{Name} settings not configured. Using only public info", ExchangeName);
         }
@@ -38,7 +37,7 @@ public class BinanceConnector : IExchange
             {
                 options.ApiCredentials = new(binanceSettings.ApiKey, binanceSettings.SecretKey);
             });
-        }
+        }*/
 
         // Create the client with options
         _restClient = new ();
@@ -109,6 +108,9 @@ public class BinanceConnector : IExchange
     
     public async Task<List<Symbol>> GetCurrenciesAsync()
     {
+        _logger.LogInformation("Skip getting currencies from {Name}", ExchangeName);
+        return [];
+
         try
         {
             var userAssets = await _restClient.SpotApi.Account.GetUserAssetsAsync();
@@ -158,6 +160,21 @@ public class BinanceConnector : IExchange
         }
     }
 
+    public async Task<Dictionary<string, decimal>> GetTickersLastPricesAsync(IEnumerable<string> tickerNames)
+    {
+        var tickersData = await _restClient.SpotApi.ExchangeData.GetTickersAsync();
+        if (!tickersData.Success)
+        {
+            _logger.LogError("Failed to get tickers data: {Error}", tickersData.Error?.Message);
+            return new Dictionary<string, decimal>();
+        }
+
+        var tickers = tickersData.Data.Where(t => tickerNames.Contains(t.Symbol)).ToArray();
+        var prices = tickers.ToDictionary(t => t.Symbol, t => t.LastPrice);
+
+        return prices;
+    }
+
     private TickerSymbol MapToTickerSymbol(BinanceSymbol symbol)
     {
         return new TickerSymbol
@@ -177,148 +194,50 @@ public class BinanceConnector : IExchange
     private async Task<BinanceSymbol[]> FilterSymbolsAsync(BinanceSymbol[] symbols)
     {
         _logger.LogInformation("Filtering {SymbolCount} symbols based on trading volume", symbols.Length);
-        
-        var result = new List<BinanceSymbol>();
-        var usdtPairs = symbols.Where(s => s.QuoteAsset == "USDT").ToArray();
-        
-        // Create lookup dictionaries for faster access
-        var baseAssetToUsdtPair = usdtPairs.ToDictionary(s => s.BaseAsset, s => s);
-        var quoteAssetToUsdtPair = usdtPairs.ToDictionary(s => s.BaseAsset, s => s);
-        
-        // Cache for price lookups to avoid redundant API calls
-        var priceCache = new Dictionary<string, decimal>();
-        
-        try
+        var filteredSymbols = new List<BinanceSymbol>();
+
+        var tickersData = await _restClient.SpotApi.ExchangeData.GetTickersAsync();
+
+        if (!tickersData.Success)
         {
-            // Process symbols in batches of 100 (API limit)
-            const int batchSize = 100;
-            var symbolNamesList = symbols.Select(s => s.Name).ToList();
-            var symbolsByName = symbols.ToDictionary(s => s.Name, s => s);
-            
-            for (var i = 0; i < symbolNamesList.Count; i += batchSize)
+            _logger.LogError("Failed to get tickers data: {Error}", tickersData.Error?.Message);
+            return symbols;
+        }
+
+        var tickers = tickersData.Data;
+
+        var usdtBasedTickers = tickers.Where(s => s.Symbol.EndsWith("USDT")).ToArray();
+
+        foreach (var ticker in tickers)
+        {
+            var tickerName = ticker.Symbol;
+
+            var symbol = symbols.FirstOrDefault(s => s.Name == tickerName);
+
+            if (symbol == null || symbol.Status != SymbolStatus.Trading)
             {
-                // Take the next batch
-                var currentBatch = symbolNamesList.Skip(i).Take(batchSize).ToArray();
-                _logger.LogDebug("Processing batch {BatchNumber} with {BatchSize} symbols (total {TotalProcessed}/{TotalSymbols})",
-                    i / batchSize + 1, currentBatch.Length, i + currentBatch.Length, symbolNamesList.Count);
-                
-                // Get trading data for the current batch
-                var symbolsTradingDataResult = await _restClient.SpotApi.ExchangeData.GetRollingWindowTickersAsync(currentBatch);
-                
-                if (!symbolsTradingDataResult.Success)
-                {
-                    _logger?.LogError("Failed to get rolling window tickers: {Error}", symbolsTradingDataResult.Error?.Message);
-                    continue;
-                }
-                
-                var symbolsTradingData = symbolsTradingDataResult.Data;
-                
-                foreach (var symbolData in symbolsTradingData)
-                {
-                    try
-                    {
-                        if (!symbolsByName.TryGetValue(symbolData.Symbol, out var symbol))
-                        {
-                            continue;
-                        }
-                        
-                        var usdtVolume = await CalculateUsdtVolumeAsync(
-                            symbol,
-                            symbolData,
-                            baseAssetToUsdtPair,
-                            quoteAssetToUsdtPair,
-                            priceCache);
-                        
-                        if (usdtVolume < 1_000_000)
-                        {
-                            continue;
-                        }
-                        
-                        _logger.LogDebug("Adding {ExchangeName} symbol {Symbol} with USDT volume {Volume:C0}", ExchangeName, symbol.Name, usdtVolume);
-                        result.Add(symbol);
-                    }
-                    catch (Exception ex)
-                    {
-                        _logger.LogError(ex, "Error processing symbol data for {Symbol}", symbolData.Symbol);
-                    }
-                }
+                continue;
             }
-            
-            _logger.LogInformation("Filtered {ResultCount} symbols based on trading volume criteria", result.Count);
-            return result.ToArray();
-        }
-        catch (Exception ex)
-        {
-            _logger.LogError(ex, "Error filtering symbols");
-            return [];
-        }
-    }
-    
-    private async Task<decimal> CalculateUsdtVolumeAsync(
-        BinanceSymbol symbol, 
-        IBinance24HPrice symbolData,
-        Dictionary<string, BinanceSymbol> baseAssetToUsdtPair,
-        Dictionary<string, BinanceSymbol> quoteAssetToUsdtPair,
-        Dictionary<string, decimal> priceCache)
-    {
-        var usdtVolume = 0m;
-        
-        try
-        {
-            // Try to calculate volume using base asset to USDT pair
-            if (baseAssetToUsdtPair.TryGetValue(symbol.BaseAsset, out var baseAssetToUsdt))
+
+            var tickerVolume = ticker.Volume;
+            var tickerQuoteName = symbol.BaseAsset;
+            var usdtBasedTicker = usdtBasedTickers.FirstOrDefault(s => s.Symbol.StartsWith(tickerQuoteName));
+
+            if (usdtBasedTicker == null)
             {
-                var price = await GetCachedPriceAsync(baseAssetToUsdt.Name, priceCache);
-                usdtVolume = symbolData.Volume * price;
+                continue;
             }
-            // If no direct conversion to USDT via base asset, try with quote asset
-            else if (quoteAssetToUsdtPair.TryGetValue(symbol.QuoteAsset, out var quoteAssetToUsdt))
+            var usdtVolume = usdtBasedTicker.LastPrice * tickerVolume;
+
+            if (usdtVolume < 1_000_000)
             {
-                var price = await GetCachedPriceAsync(quoteAssetToUsdt.Name, priceCache);
-                usdtVolume = symbolData.QuoteVolume * price;
+                continue;
             }
-            // If the quote asset is already USDT, use quote volume directly
-            else if (symbol.QuoteAsset == "USDT")
-            {
-                usdtVolume = symbolData.QuoteVolume;
-            }
-            
-            return usdtVolume;
+
+            _logger.LogDebug("Adding {ExchangeName} symbol {Symbol} with USDT volume {Volume:C0}", ExchangeName, symbol.Name, usdtVolume);
+            filteredSymbols.Add(symbol);
         }
-        catch (Exception ex)
-        {
-            _logger.LogError(ex, "Error calculating USDT volume for {Symbol}", symbol.Name);
-            return 0m;
-        }
-    }
-    
-    private async Task<decimal> GetCachedPriceAsync(string symbol, Dictionary<string, decimal> priceCache)
-    {
-        // Return cached price if available
-        if (priceCache.TryGetValue(symbol, out var cachedPrice))
-        {
-            return cachedPrice;
-        }
-        
-        // Get price from API and cache it
-        try
-        {
-            var priceResult = await _restClient.SpotApi.ExchangeData.GetPriceAsync(symbol);
-            
-            if (!priceResult.Success)
-            {
-                _logger.LogError("Failed to get price for {Symbol}: {Error}", symbol, priceResult.Error?.Message);
-                return 0m;
-            }
-            
-            var price = priceResult.Data.Price;
-            priceCache[symbol] = price; // Cache the result
-            return price;
-        }
-        catch (Exception ex)
-        {
-            _logger.LogError(ex, "Error getting price for {Symbol}", symbol);
-            return 0m;
-        }
+
+        return filteredSymbols.ToArray();
     }
 }

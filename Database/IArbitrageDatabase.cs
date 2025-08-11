@@ -12,7 +12,7 @@ public interface IArbitrageDatabase
     List<Symbol> GetAllSymbols();
     List<Symbol> GetSymbolsByExchange(string exchange);
     List<Symbol> GetSymbolsByCode(string code);
-    Symbol GetSymbol(string exchange, string code, SymbolNetwork network);
+    Symbol? TryGetSymbol(string exchange, string code);
     
     // TickerSymbol operations
     void SaveTickerSymbols(List<TickerSymbol> tickerSymbols);
@@ -29,4 +29,5 @@ public interface IArbitrageDatabase
     void SaveMarketSnapshot(DateTime timestamp, Dictionary<string, Dictionary<string, OrderBook>> marketSnapshot);
     Dictionary<string, Dictionary<string, OrderBook>> GetMarketSnapshot(DateTime timestamp);
     List<DateTime> GetAvailableMarketSnapshots(DateTime from, DateTime to);
+    void UpdateTickerSymbols(List<TickerSymbol> tickerSymbols);
 }

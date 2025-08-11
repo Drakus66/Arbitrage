@@ -16,72 +16,40 @@ public class LiteDbArbitrageDatabase : IArbitrageDatabase
 {
     private readonly string _dbPath;
     private readonly ILogger<LiteDbArbitrageDatabase> _logger;
-    private readonly BsonMapper _mapper;
-    private readonly LiteDbOptions _options;
 
     public LiteDbArbitrageDatabase(IOptions<LiteDbOptions> options, ILogger<LiteDbArbitrageDatabase> logger)
     {
         _dbPath = options.Value.DatabasePath;
         _logger = logger;
-        _options = options.Value;
-        
+
         // Ensure the directory exists
         var directory = Path.GetDirectoryName(_dbPath);
         if (!string.IsNullOrEmpty(directory) && !Directory.Exists(directory))
         {
             Directory.CreateDirectory(directory);
         }
-        // Configure mapper
-        _mapper = BsonMapper.Global;
-        
+
+        ClearDataBase();
+
         _logger.LogInformation("LiteDB database initialized at {DbPath}", _dbPath);
     }
-    
-    private LiteDatabase GetDatabase()
+
+    private void ClearDataBase()
     {
-        return new LiteDatabase(_dbPath);
-    }
-    
-    /// <summary>
-    /// Creates the initial database schema with all collections and indexes
-    /// </summary>
-    private void CreateDatabaseSchema(LiteDatabase db)
-    {
-        try
+        var db = GetDatabase();
+        var collections  = db.GetCollectionNames();
+        foreach (var collectionName in collections)
         {
-            _logger.LogInformation("Creating database schema");
-            
-            // Create symbols collection and indexes
-            var symbolsCollection = db.GetCollection<Symbol>("symbols");
-            symbolsCollection.EnsureIndex(x => x.Exchange);
-            symbolsCollection.EnsureIndex(x => x.Code);
-            
-            // Create ticker symbols collection and indexes
-            var tickerSymbolsCollection = db.GetCollection<TickerSymbol>("tickerSymbols");
-            tickerSymbolsCollection.EnsureIndex(x => x.Exchange);
-            tickerSymbolsCollection.EnsureIndex(x => x.BaseAsset);
-            tickerSymbolsCollection.EnsureIndex(x => x.QuoteAsset);
-            
-            // Create order books collection and indexes
-            var orderBooksCollection = db.GetCollection<OrderBook>("orderBooks");
-            orderBooksCollection.EnsureIndex("Symbol.Exchange");
-            orderBooksCollection.EnsureIndex("Symbol.BaseAsset");
-            orderBooksCollection.EnsureIndex("Symbol.QuoteAsset");
-            orderBooksCollection.EnsureIndex(x => x.Timestamp);
-            
-            // Create market snapshots collection and indexes
-            var marketSnapshotsCollection = db.GetCollection<BsonDocument>("marketSnapshots");
-            marketSnapshotsCollection.EnsureIndex("Timestamp");
-            
-            _logger.LogInformation("Database schema created successfully");
-        }
-        catch (Exception ex)
-        {
-            _logger.LogError(ex, "Error creating database schema");
-            throw;
+            var collection = db.GetCollection(collectionName);
+            collection.DeleteAll();
         }
     }
 
+    private LiteDatabase GetDatabase()
+    {
+        return new (_dbPath);
+    }
+    
     #region Symbol Operations
     
     public void SaveSymbols(List<Symbol> symbols)
@@ -155,17 +123,17 @@ public class LiteDbArbitrageDatabase : IArbitrageDatabase
         }
     }
     
-    public Symbol GetSymbol(string exchange, string code, SymbolNetwork network)
+    public Symbol? TryGetSymbol(string exchange, string code)
     {
         try
         {
             using var db = GetDatabase();
             var collection = db.GetCollection<Symbol>("symbols");
-            return collection.FindOne(x => x.Exchange == exchange && x.Code == code && Array.Exists(x.Networks, n => n.Name == network.Name));
+            return collection.FindOne(x => x.Exchange == exchange && x.Code == code);
         }
         catch (Exception ex)
         {
-            _logger.LogError(ex, "Error retrieving symbol {Exchange}:{Code}:{Network}", exchange, code, network);
+            _logger.LogError(ex, "Error retrieving symbol {Exchange}:{Code}", exchange, code);
             return null;
         }
     }
@@ -200,6 +168,40 @@ public class LiteDbArbitrageDatabase : IArbitrageDatabase
             throw;
         }
     }
+
+    public void UpdateTickerSymbols(List<TickerSymbol> tickerSymbols)
+    {
+        try
+        {
+            using var db = GetDatabase();
+            var collection = db.GetCollection<TickerSymbol>("tickerSymbols");
+
+            // Upsert (insert or update) the ticker symbols
+            foreach (var symbol in tickerSymbols)
+            {
+                var dbSymbol = collection.FindOne(x =>
+                    x.Exchange == symbol.Exchange &&
+                    x.BaseAsset == symbol.BaseAsset &&
+                    x.QuoteAsset == symbol.QuoteAsset);
+
+                dbSymbol.LastPrice = symbol.LastPrice;
+                var updated =collection.Update(dbSymbol);
+                if (!updated)
+                {
+                    _logger.LogError("Failed to update ticker symbol {Exchange}:{BaseAsset}/{QuoteAsset}", symbol.Exchange, symbol.BaseAsset, symbol.QuoteAsset);
+                }
+            }
+
+            _logger.LogInformation("Updated {Count} ticker symbols to the database", tickerSymbols.Count);
+        }
+        catch (Exception ex)
+        {
+            _logger.LogError(ex, "Error saving ticker symbols to the database");
+            throw;
+        }
+    }
+
+
     
     public List<TickerSymbol> GetAllTickerSymbols()
     {

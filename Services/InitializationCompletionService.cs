@@ -23,7 +23,7 @@ public class InitializationCompletionService
     /// <summary>
     /// Reset the initialization state (mainly for testing purposes)
     /// </summary>
-    public void Reset()
+    public void ResetInitialization()
     {
         if (_initializationCompletionSource.Task.IsCompleted)
         {

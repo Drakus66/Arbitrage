@@ -5,6 +5,8 @@ namespace Arbitrage.SharedModels;
 /// </summary>
 public class TickerSymbol
 {
+    public Guid Id { get; init; } = Guid.NewGuid();
+
     /// <summary>
     /// The base asset (e.g., BTC in BTC/USDT)
     /// </summary>
@@ -24,6 +26,9 @@ public class TickerSymbol
     /// The name of the exchange this symbol belongs to
     /// </summary>
     public string Exchange { get; set; } = string.Empty;
+
+    // TickerLast price
+    public decimal LastPrice { get; set; } = 0;
     
     /// <summary>
     /// Minimum order quantity for the base asset

@@ -55,12 +55,19 @@ public static class Program
             .UseServiceProviderFactory(new AutofacServiceProviderFactory())
             .ConfigureServices(services =>
             {
+                // Добавляем Memory Cache для оптимизации операций
+                services.AddMemoryCache();
+                
                 // Register initialization coordination service as singleton
                 services.AddSingleton<InitializationCompletionService>();
+                services.AddSingleton<ArbitrageOpportunityManager>();
+                services.AddSingleton<FindArbitrageService>();
                 
                 // Register hosted services in the order they should start
                 services.AddHostedService<StartupInitializationService>();
                 services.AddHostedService<CollectorService>();
+                services.AddHostedService<ArbitrageAnalysisService>();
+
 
                 // Configure LiteDB options
                 services.Configure<LiteDbOptions>(options =>
@@ -79,7 +86,8 @@ public static class Program
             {
                 // Register exchange connectors
                 b.RegisterType<BinanceConnector>().As<IExchange>();
-                
+                b.RegisterType<OkxConnector>().As<IExchange>();
+
                 // Register database services
                 b.RegisterType<LiteDbArbitrageDatabase>().As<IArbitrageDatabase>().SingleInstance();
             });
